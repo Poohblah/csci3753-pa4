@@ -22,3 +22,6 @@ aes-crypt-util
 handout/*.log
 handout/*.out
 handout/*.aux
+
+#fuse-tutorial
+fuse-tutorial
