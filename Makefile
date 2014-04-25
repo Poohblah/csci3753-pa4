@@ -35,6 +35,9 @@ fusehello: fusehello.o
 fusexmp: fusexmp.o
 	$(CC) $(LFLAGS) $^ -o $@ $(LLIBSFUSE)
 
+pa4-encfs: pa4-encfs.o
+	$(CC) $(LFLAGS) $^ -o $@ $(LLIBSFUSE)
+
 xattr-util: xattr-util.o
 	$(CC) $(LFLAGS) $^ -o $@
 
@@ -45,6 +48,9 @@ fusehello.o: fusehello.c
 	$(CC) $(CFLAGS) $(CFLAGSFUSE) $<
 
 fusexmp.o: fusexmp.c
+	$(CC) $(CFLAGS) $(CFLAGSFUSE) $<
+
+pa4-encfs.o: pa4-encfs.c
 	$(CC) $(CFLAGS) $(CFLAGSFUSE) $<
 
 xattr-util.o: xattr-util.c
