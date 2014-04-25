@@ -34,6 +34,9 @@
 #define ENCRYPT 1
 #define DECRYPT 0
 #define PASSTHROUGH -1
+#define ENC_XATTR_NAME "user.pa4-encfs.encrypted"
+#define ENC_XATTR_ENCRYPTED "true"
+#define ENC_XATTR_UNENCRYPTED "false"
 
 static void encfs_fullpath(char fpath[PATH_MAX], const char *path)
 {
@@ -41,6 +44,21 @@ static void encfs_fullpath(char fpath[PATH_MAX], const char *path)
     strncat(fpath, path, PATH_MAX); // ridiculously long paths will
 				    // break here
 }
+
+static int encfs_is_encrypted(const char *fpath)
+{
+	int len;
+
+	printf("hello from is_encrypted function\n");
+	len = lgetxattr(fpath, ENC_XATTR_NAME, NULL, 0);
+	printf("len from getxattr is: %d\n", len);
+	if (len < 0) return 0;
+	char value [len];
+	lgetxattr(fpath, ENC_XATTR_NAME, value, len);
+	value[len] = '\0';
+	printf("encryption value is: %s\n", value);
+	return (!strcmp(value, ENC_XATTR_ENCRYPTED))? 1 : 0;
+}	
 
 static int encfs_getattr(const char *path, struct stat *stbuf)
 {
@@ -313,16 +331,19 @@ static int encfs_read(const char *path, char *buf, size_t size, off_t offset,
 	FILE* istream;
 	FILE* ostream;
 	int res;
+	int action;
 	(void) fi;
 
 	char fpath[PATH_MAX];
 	encfs_fullpath(fpath, path);
 
+	action = (encfs_is_encrypted(fpath))? DECRYPT : PASSTHROUGH;
+
 	/* open file and decrypt it */
 
 	istream = fopen(fpath, "rb");
 	ostream = open_memstream(&ostream_ptr, &ostream_size);
-	do_crypt(istream, ostream, DECRYPT, ENCFS_DATA->keystr);
+	do_crypt(istream, ostream, action, ENCFS_DATA->keystr);
 
 	/* pass stream on to fread */
 
@@ -338,17 +359,18 @@ static int encfs_write(const char *path, const char *buf, size_t size,
 {
 	char* istream_ptr;
 	size_t istream_size;
-	char* ostream_ptr;
-	size_t ostream_size;
 	FILE* istream;
 	FILE* ostream;
-        int fd;
+	int action;
 	int res;
 
 	char fpath[PATH_MAX];
 	encfs_fullpath(fpath, path);
 
 	(void) fi;
+	(void) offset;
+
+	action = (encfs_is_encrypted(fpath))? ENCRYPT : PASSTHROUGH;
 
 	/* convert input buffer to stream */
 
@@ -358,7 +380,7 @@ static int encfs_write(const char *path, const char *buf, size_t size,
         /* encrypt */
         /* read output stream to file */
 	ostream = fopen(fpath, "rw+");
-	if (!do_crypt(istream, ostream, ENCRYPT, ENCFS_DATA->keystr)) return -1;
+	do_crypt(istream, ostream, action, ENCFS_DATA->keystr);
 	fclose(ostream);
 
 	res = size;
