@@ -309,7 +309,7 @@ static int encfs_read(const char *path, char *buf, size_t size, off_t offset,
 		    struct fuse_file_info *fi)
 {
 	char* ostream_ptr;
-        size_t ostream_size;
+	size_t ostream_size;
 	FILE* istream;
 	FILE* ostream;
 	int res;
@@ -322,12 +322,12 @@ static int encfs_read(const char *path, char *buf, size_t size, off_t offset,
 
 	istream = fopen(fpath, "rb");
 	ostream = open_memstream(&ostream_ptr, &ostream_size);
-        do_crypt(istream, ostream, DECRYPT, ENCFS_DATA->keystr);
+	do_crypt(istream, ostream, DECRYPT, ENCFS_DATA->keystr);
 
 	/* pass stream on to fread */
 
 	fseeko(ostream, offset, SEEK_SET);
-        int csize = sizeof(char);
+	int csize = sizeof(char);
 	res = csize * fread(buf, csize, size, ostream);
 
 	return res;
@@ -336,28 +336,33 @@ static int encfs_read(const char *path, char *buf, size_t size, off_t offset,
 static int encfs_write(const char *path, const char *buf, size_t size,
 		     off_t offset, struct fuse_file_info *fi)
 {
-	int fd;
+	char* istream_ptr;
+	size_t istream_size;
+	char* ostream_ptr;
+	size_t ostream_size;
+	FILE* istream;
+	FILE* ostream;
+        int fd;
 	int res;
 
 	char fpath[PATH_MAX];
 	encfs_fullpath(fpath, path);
 
 	(void) fi;
-	fd = open(fpath, O_WRONLY);
-	if (fd == -1)
-		return -errno;
 
-	/* open file and decrypt it */
+	/* convert input buffer to stream */
 
-        /* write buffer at offset */
+	istream = open_memstream(&istream_ptr, &istream_size);
+	fwrite(buf, size, sizeof(char), istream);
 
-        /* encrypt file and write it back to disk */
+        /* encrypt */
+        /* read output stream to file */
+	ostream = fopen(fpath, "rw+");
+	if (!do_crypt(istream, ostream, ENCRYPT, ENCFS_DATA->keystr)) return -1;
+	fclose(ostream);
 
-	res = pwrite(fd, buf, size, offset);
-	if (res == -1)
-		res = -errno;
+	res = size;
 
-	close(fd);
 	return res;
 }
 
@@ -381,6 +386,8 @@ static int encfs_create(const char* path, mode_t mode, struct fuse_file_info* fi
 
 	char fpath[PATH_MAX];
 	encfs_fullpath(fpath, path);
+
+	/* create empty encrypted file */
 
 	int res;
 	res = creat(fpath, mode);
@@ -483,7 +490,7 @@ static struct fuse_operations encfs_oper = {
 	.read		= encfs_read,
 	.write		= encfs_write,
 	.statfs		= encfs_statfs,
-	.create         = encfs_create,
+	.create	 = encfs_create,
 	.release	= encfs_release,
 	.fsync		= encfs_fsync,
 #ifdef HAVE_SETXATTR
@@ -496,7 +503,7 @@ static struct fuse_operations encfs_oper = {
 
 int main(int argc, char *argv[])
 {
-        struct encfs_data* data;
+	struct encfs_data* data;
 	data = malloc(sizeof(struct encfs_data));
 	if (data == NULL) {
 		perror("main calloc");
