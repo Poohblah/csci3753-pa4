@@ -13,9 +13,11 @@
 #define _XOPEN_SOURCE 500
 #endif
 
+#define _GNU_SOURCE
+
 #include <fuse.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <limits.h>
 #include <unistd.h>
@@ -27,7 +29,11 @@
 #include <sys/xattr.h>
 #endif
 
+#include "aes-crypt.h"
 #include "pa4-encfs.h"
+#define ENCRYPT 1
+#define DECRYPT 0
+#define PASSTHROUGH -1
 
 static void encfs_fullpath(char fpath[PATH_MAX], const char *path)
 {
@@ -302,22 +308,28 @@ static int encfs_open(const char *path, struct fuse_file_info *fi)
 static int encfs_read(const char *path, char *buf, size_t size, off_t offset,
 		    struct fuse_file_info *fi)
 {
-	int fd;
+	char* ostream_ptr;
+        size_t ostream_size;
+	FILE* istream;
+	FILE* ostream;
 	int res;
+	(void) fi;
 
 	char fpath[PATH_MAX];
 	encfs_fullpath(fpath, path);
 
-	(void) fi;
-	fd = open(fpath, O_RDONLY);
-	if (fd == -1)
-		return -errno;
+	/* open file and decrypt it */
 
-	res = pread(fd, buf, size, offset);
-	if (res == -1)
-		res = -errno;
+	istream = fopen(fpath, "rb");
+	ostream = open_memstream(&ostream_ptr, &ostream_size);
+        do_crypt(istream, ostream, DECRYPT, ENCFS_DATA->keystr);
 
-	close(fd);
+	/* pass stream on to fread */
+
+	fseeko(ostream, offset, SEEK_SET);
+        int csize = sizeof(char);
+	res = csize * fread(buf, csize, size, ostream);
+
 	return res;
 }
 
@@ -334,6 +346,12 @@ static int encfs_write(const char *path, const char *buf, size_t size,
 	fd = open(fpath, O_WRONLY);
 	if (fd == -1)
 		return -errno;
+
+	/* open file and decrypt it */
+
+        /* write buffer at offset */
+
+        /* encrypt file and write it back to disk */
 
 	res = pwrite(fd, buf, size, offset);
 	if (res == -1)
@@ -485,9 +503,12 @@ int main(int argc, char *argv[])
 		abort();
 	}
 
-	// Pull the rootdir out of the argument list and save it in my
-	// internal data
+	/* grab the keystr and rootdir and save their values */
 	data->rootdir = realpath(argv[argc-2], NULL);
+	argv[argc-2] = argv[argc-1];
+	argv[argc-1] = NULL;
+	argc--;
+	data->keystr = argv[argc-2];
 	argv[argc-2] = argv[argc-1];
 	argv[argc-1] = NULL;
 	argc--;
