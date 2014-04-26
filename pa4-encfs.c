@@ -49,14 +49,11 @@ static int encfs_is_encrypted(const char *fpath)
 {
 	int len;
 
-	printf("hello from is_encrypted function\n");
 	len = lgetxattr(fpath, ENC_XATTR_NAME, NULL, 0);
-	printf("len from getxattr is: %d\n", len);
 	if (len < 0) return 0;
 	char value [len];
 	lgetxattr(fpath, ENC_XATTR_NAME, value, len);
 	value[len] = '\0';
-	printf("encryption value is: %s\n", value);
 	return (!strcmp(value, ENC_XATTR_ENCRYPTED))? 1 : 0;
 }	
 
@@ -417,6 +414,11 @@ static int encfs_create(const char* path, mode_t mode, struct fuse_file_info* fi
 	return -errno;
 
 	close(res);
+
+	res = lsetxattr(fpath, ENC_XATTR_NAME, ENC_XATTR_ENCRYPTED,
+		sizeof(ENC_XATTR_ENCRYPTED), XATTR_CREATE);
+	if (res == -1)
+		return -errno;
 
 	return 0;
 }
