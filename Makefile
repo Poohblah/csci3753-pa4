@@ -24,6 +24,8 @@ PA4_ENCFS = pa4-encfs
 
 .PHONY: all fuse-examples xattr-examples openssl-examples clean
 
+default: pa4-encfs
+
 all: fuse-examples xattr-examples openssl-examples
 
 fuse-examples: $(FUSE_EXAMPLES)
